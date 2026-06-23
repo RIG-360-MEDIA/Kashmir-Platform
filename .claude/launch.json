@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kashmir-documentary-v2",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "cwd": "C:\Internship\Project Kashmir\Kashmir-Documentary-v2\kashmir-frontend"
+    }
+  ]
+}

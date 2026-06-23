@@ -1,0 +1,127 @@
+/**
+ * Application Configuration
+ * All environment-specific and project-specific values live here.
+ * NEVER hardcode values in components — import from this file.
+ */
+
+export const CONFIG = {
+  /* ── Backend API ───────────────────────
+     Same-origin: the backend now lives in Next.js API routes under /api.
+     baseUrl is empty so requests resolve to relative '/api/...'.
+  ─────────────────────────────────────── */
+  api: {
+    baseUrl: process.env.NEXT_PUBLIC_API_URL ?? '',
+    prefix: '/api',
+    timeoutMs: 10_000,
+  },
+
+  /* ── Film Identity ─────────────────────
+     Source of truth: src/content/film.ts
+     Backend returns stale data — do NOT use for identity.
+  ─────────────────────────────────────── */
+  film: {
+    title: 'Kashmir — Fighting for Peace',
+    titleShort: 'Kashmir',
+    subtitle: 'Fighting for Peace',
+    tagline: 'Two truths. Same sky. Same soil.',
+    productionCompany: 'Rig 360 Media',
+    director: 'Rig 360 Media',
+    durationMinutes: 70,
+    releaseYear: 2026,
+    genres: ['Documentary', 'History', 'Human Rights'],
+    language: 'Hindi / English',
+    certificate: 'U/A',
+  },
+
+  /* ── Pricing ────────────────────────── */
+  pricing: {
+    currency: 'INR',
+    currencySymbol: '₹',
+    amount: 299,
+    amountDisplay: '₹299',
+    accessType: 'Lifetime',
+    description: 'Lifetime Access · Full HD',
+  },
+
+  /* ── Payment ────────────────────────── */
+  payment: {
+    razorpayKeyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? '',
+    devBypass: process.env.NEXT_PUBLIC_DEV_BYPASS_PAYMENT === 'true',
+  },
+
+  /* ── Media ───────────────────────────── */
+  media: {
+    /* Trailer URL — empty = coming soon state */
+    trailerUrl: process.env.NEXT_PUBLIC_TRAILER_URL ?? '',
+    /* Full film URL — empty = requires payment */
+    filmUrl: process.env.NEXT_PUBLIC_FILM_URL ?? '',
+    /* Poster placeholder (Pexels Kashmir — swap for production still) */
+    posterUrl: 'https://images.pexels.com/photos/8303558/pexels-photo-8303558.jpeg?auto=compress&cs=tinysrgb&w=800&q=85',
+  },
+
+  /* ── Hero Images (Pexels Kashmir placeholders — swap for production stills) ── */
+  heroImages: {
+    /* Primary: Kashmir peaks dissolving into mist, dark pine treeline foreground */
+    primary: 'https://images.pexels.com/photos/14651212/pexels-photo-14651212.jpeg?auto=compress&cs=tinysrgb&w=1920&q=85',
+    /* Alt 1: Storm clouds over Kashmir peaks, stone ruins foreground */
+    alt1: 'https://images.pexels.com/photos/8303558/pexels-photo-8303558.jpeg?auto=compress&cs=tinysrgb&w=1920&q=85',
+    /* Alt 2: Spare slot for production still once available */
+    alt2: 'https://images.pexels.com/photos/8303558/pexels-photo-8303558.jpeg?auto=compress&cs=tinysrgb&w=1920&q=85',
+  },
+
+  /* ── Section Images (used in Film Overview, Duality, etc.) ── */
+  sectionImages: {
+    /* Kashmir valley for Film/Overview section poster */
+    poster: 'https://images.pexels.com/photos/8303558/pexels-photo-8303558.jpeg?auto=compress&cs=tinysrgb&w=800&q=85',
+  },
+
+  /* ── Features / Coming Soon Toggles ──── */
+  features: {
+    trailerAvailable: false,
+    filmAvailable: false,
+    paymentEnabled: false,    /* enable once Razorpay keys are set */
+    socialFeedEnabled: true,
+    newsFeedEnabled: true,
+    mapEnabled: true,
+  },
+
+  /* ── Effects Flags ───────────────────── */
+  effects: {
+    grainEnabled: true,
+    cursorEnabled: true,
+    cursorLightEnabled: true,
+    smoothScrollEnabled: true,
+    /* Future WebGL upgrade — each is a swap point */
+    webglHeroEnabled: false,
+    webglDualityEnabled: false,
+    /* Atmosphere background system */
+    atmosphereEnabled: true,
+    atmosphereNoiseEnabled: true,
+  },
+
+  /* ── Social Links ────────────────────── */
+  social: {
+    instagram: '',
+    twitter: '',
+    youtube: '',
+    facebook: '',
+  },
+
+  /* ── Duality Section ─────────────────── */
+  duality: {
+    enabled: true,
+    ctaHref: '#watch',
+    ctaLabel: 'Watch the Film',
+  },
+
+  /* ── SEO ─────────────────────────────── */
+  seo: {
+    siteName: 'Kashmir — Fighting for Peace',
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000',
+    defaultDescription:
+      'A documentary about ordinary people living in extraordinary circumstances. Kashmir — Fighting for Peace by Rig 360 Media.',
+    ogImage: 'https://images.pexels.com/photos/14651212/pexels-photo-14651212.jpeg?auto=compress&cs=tinysrgb&w=1200&q=80',
+  },
+} as const;
+
+export type Config = typeof CONFIG;
