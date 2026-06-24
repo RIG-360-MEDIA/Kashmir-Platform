@@ -91,19 +91,12 @@ export interface SocialResponse {
   fetched_at: string;
 }
 
-/* ── Payment ─────────────────────── */
+/* ── Payment (Airpay) ─────────────── */
 
-export interface PaymentOrder {
-  order_id: string;
-  amount: number;
-  currency: string;
-  key_id: string;
-}
-
-export interface PaymentVerification {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
+export interface AirpayOrder {
+  transaction_id: string;
+  post_url: string;
+  form_fields: Record<string, string>;
 }
 
 /* Backend returns { verified, access_token?, message } */

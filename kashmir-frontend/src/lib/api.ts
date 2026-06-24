@@ -10,7 +10,7 @@
 import { CONFIG } from '@/lib/config';
 import type {
   TimelineResponse, NewsResponse, SocialResponse,
-  DocumentaryTimestamps, PaymentOrder, PaymentVerification,
+  DocumentaryTimestamps, AirpayOrder,
   AccessToken, AccessVerification,
 } from '@/types/api';
 
@@ -72,16 +72,6 @@ function transformSocialResponse(raw: Record<string, unknown>): SocialResponse |
   };
 }
 
-function transformPaymentOrder(raw: Record<string, unknown>): PaymentOrder | null {
-  if (!raw?.order_id) return null;
-  return {
-    order_id: String(raw.order_id),
-    amount:   Number(raw.amount),
-    currency: String(raw.currency),
-    key_id:   String(raw.razorpay_key_id ?? ''),
-  };
-}
-
 /* ─────────────────────────────────────────────────────────────
    API CALLS
 ───────────────────────────────────────────────────────────── */
@@ -115,33 +105,23 @@ export const api = {
     } catch { return null; }
   },
 
-  /* Payment — create order; backend requires both email AND name */
-  createOrder: async (email: string, name: string): Promise<PaymentOrder | null> => {
+  /* Payment — create Airpay order, returns form fields for redirect */
+  createAirpayOrder: async (data: {
+    email: string; name: string; phone: string;
+    address?: string; city?: string; state?: string; pin_code?: string;
+  }): Promise<AirpayOrder | null> => {
     try {
       const res = await fetch(`${BASE}/payment/create-order`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email, name }),
-      });
-      if (!res.ok) return null;
-      return transformPaymentOrder(await res.json());
-    } catch { return null; }
-  },
-
-  /* Payment — verify Razorpay signature, receive JWT */
-  verifyPayment: async (data: PaymentVerification): Promise<AccessToken | null> => {
-    try {
-      const res = await fetch(`${BASE}/payment/verify`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(data),
       });
       if (!res.ok) return null;
-      return (await res.json()) as AccessToken;
+      return (await res.json()) as AirpayOrder;
     } catch { return null; }
   },
 
-  /* Payment — verify JWT; backend is GET with Authorization header (not POST) */
+  /* Payment — verify JWT; backend is GET with Authorization header */
   verifyAccess: async (token: string): Promise<AccessVerification | null> => {
     try {
       const res = await fetch(`${BASE}/payment/verify-access`, {

@@ -10,9 +10,15 @@ class Settings(BaseSettings):
     # Apify
     apify_api_token: str = ""
 
-    # Razorpay
-    razorpay_key_id: str = ""
-    razorpay_key_secret: str = ""
+    # Airpay
+    airpay_merchant_id: str = ""
+    airpay_username: str = ""
+    airpay_password: str = ""
+    airpay_api_key: str = ""
+    airpay_client_id: str = ""
+    airpay_secret_key: str = ""
+    airpay_is_test: bool = True
+    airpay_base_url: str = "https://payments.airpay.co.in/pay/index.php"
 
     # News
     news_api_key: str = ""
@@ -20,7 +26,7 @@ class Settings(BaseSettings):
     # App
     app_secret_key: str = "dev-secret"
     frontend_url: str = "http://localhost:3000"
-    documentary_price_inr: int = 299
+    documentary_price_inr: int = 1
 
     # JWT
     jwt_secret: str = "dev-jwt-secret"

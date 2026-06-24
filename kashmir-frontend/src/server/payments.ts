@@ -1,74 +1,117 @@
-/**
- * Payment service — port of `payments.py`.
- *
- * - createOrder:  creates a Razorpay order (official Node SDK).
- * - verifyPayment: validates the Razorpay HMAC-SHA256 signature, then issues a
- *                  signed JWT access token (HS256), identical to the Python flow.
- * - verifyAccessToken: verifies/decodes the JWT.
- *
- * The HMAC body, hashing, and JWT claims (sub = payment id, exp) match the original
- * exactly, so tokens are interchangeable with the former backend when secrets match.
- */
 import crypto from 'crypto';
-import Razorpay from 'razorpay';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { getServerSettings } from '@/server/config';
 
-export interface CreateOrderResult {
-  order_id: string;
-  amount: number;
-  currency: string;
-  razorpay_key_id: string;
+export interface AirpayOrderInput {
+  email: string;
+  name: string;
+  phone: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  pin_code?: string;
 }
 
-export interface VerifyPaymentInput {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
+export interface AirpayOrderResult {
+  transaction_id: string;
+  post_url: string;
+  form_fields: Record<string, string>;
 }
 
-export interface VerifyPaymentResult {
+export interface VerifyCallbackResult {
   verified: boolean;
   access_token?: string;
   message: string;
 }
 
-export async function createOrder(email: string, name: string): Promise<CreateOrderResult> {
+function clean(val: string): string {
+  return val.trim().replace(/^['"]|['"]$/g, '');
+}
+
+function sha256(input: string): string {
+  return crypto.createHash('sha256').update(input).digest('hex');
+}
+
+export async function createAirpayOrder(input: AirpayOrderInput): Promise<AirpayOrderResult> {
   const s = getServerSettings();
-  const instance = new Razorpay({ key_id: s.razorpayKeyId, key_secret: s.razorpayKeySecret });
-  const order = await instance.orders.create({
-    amount: s.documentaryPriceInr * 100, // paise
-    currency: 'INR',
-    payment_capture: true,
-    notes: { email, name },
-  });
+
+  const merchantId = clean(s.airpayMerchantId);
+  const username = clean(s.airpayUsername);
+  const password = clean(s.airpayPassword);
+  const apiKey = clean(s.airpayApiKey);
+
+  const txnId = `KFP${Date.now()}`;
+  const amount = String(s.documentaryPriceInr);
+  const currency = '356'; // INR
+
+  const privateKey = sha256(`${apiKey}@${username}:|:${password}`);
+  const sKey = sha256(`${username}~:~${password}`);
+
+  const buyerData = [
+    input.email, input.name, input.name, '',
+    input.address ?? '', input.city ?? '', input.state ?? '',
+    input.country ?? 'India', amount, txnId, currency, '0', 'INR', '0',
+    input.phone, input.pin_code ?? '',
+  ].join('~:~');
+
+  const checksum = sha256(`${sKey}@${buyerData}`);
+
+  const formFields: Record<string, string> = {
+    mercid: merchantId,
+    orderid: txnId,
+    amount,
+    currency,
+    isocurrency: 'INR',
+    chmod: '0',
+    buyerEmail: input.email,
+    buyerPhone: input.phone,
+    buyerFirstName: input.name,
+    buyerLastName: '',
+    buyerAddress: input.address ?? '',
+    buyerCity: input.city ?? '',
+    buyerState: input.state ?? '',
+    buyerCountry: input.country ?? 'India',
+    buyerPinCode: input.pin_code ?? '',
+    privatekey: privateKey,
+    checksum,
+    txnsubtype: '',
+  };
+
   return {
-    order_id: order.id,
-    amount: Number(order.amount),
-    currency: order.currency,
-    razorpay_key_id: s.razorpayKeyId,
+    transaction_id: txnId,
+    post_url: s.airpayBaseUrl,
+    form_fields: formFields,
   };
 }
 
-export async function verifyPayment(input: VerifyPaymentInput): Promise<VerifyPaymentResult> {
+export async function verifyAirpayCallback(formData: Record<string, string>): Promise<VerifyCallbackResult> {
   const s = getServerSettings();
-  const body = `${input.razorpay_order_id}|${input.razorpay_payment_id}`;
-  const expected = crypto.createHmac('sha256', s.razorpayKeySecret).update(body).digest('hex');
+  const secret = clean(s.airpaySecretKey);
 
-  const expectedBuf = Buffer.from(expected);
-  const providedBuf = Buffer.from(input.razorpay_signature);
-  const valid = expectedBuf.length === providedBuf.length &&
-    crypto.timingSafeEqual(expectedBuf, providedBuf);
+  const txnId = formData.TRANSACTIONID ?? '';
+  const apTxnId = formData.APTRANSACTIONID ?? '';
+  const amount = formData.AMOUNT ?? '';
+  const status = formData.TRANSACTIONSTATUS ?? '';
+  const message = formData.MESSAGE ?? '';
+  const apHash = formData.ap_SecureHash ?? '';
 
-  if (!valid) {
-    return { verified: false, message: 'Invalid signature' };
+  const verifyStr = `${txnId}:${apTxnId}:${amount}:${status}:${message}:${secret}`;
+  const expected = sha256(verifyStr);
+
+  if (expected !== apHash) {
+    return { verified: false, message: 'Invalid checksum' };
+  }
+
+  if (status !== '200') {
+    return { verified: false, message: `Payment failed: ${message}` };
   }
 
   const key = new TextEncoder().encode(s.jwtSecret);
   const expSeconds = Math.floor(Date.now() / 1000) + s.accessTokenExpireMinutes * 60;
   const token = await new SignJWT({})
     .setProtectedHeader({ alg: s.jwtAlgorithm })
-    .setSubject(input.razorpay_payment_id)
+    .setSubject(apTxnId || txnId)
     .setExpirationTime(expSeconds)
     .sign(key);
 

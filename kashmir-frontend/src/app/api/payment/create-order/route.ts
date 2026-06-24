@@ -1,14 +1,23 @@
 import { NextResponse } from 'next/server';
-import { createOrder } from '@/server/payments';
+import { createAirpayOrder } from '@/server/payments';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/* POST /api/payment/create-order  body: { email, name } */
+/* POST /api/payment/create-order  body: { email, name, phone, address?, city?, state?, pin_code? } */
 export async function POST(request: Request) {
   try {
-    const { email, name } = await request.json();
-    const result = await createOrder(email, name);
+    const body = await request.json();
+    const result = await createAirpayOrder({
+      email: body.email,
+      name: body.name,
+      phone: body.phone,
+      address: body.address,
+      city: body.city,
+      state: body.state,
+      country: body.country,
+      pin_code: body.pin_code,
+    });
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(

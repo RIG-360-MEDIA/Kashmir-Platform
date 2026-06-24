@@ -37,15 +37,16 @@ export const CONFIG = {
   pricing: {
     currency: 'INR',
     currencySymbol: '₹',
-    amount: 299,
-    amountDisplay: '₹299',
+    amount: 1,
+    amountDisplay: '₹1',
     accessType: 'Lifetime',
     description: 'Lifetime Access · Full HD',
   },
 
   /* ── Payment ────────────────────────── */
   payment: {
-    razorpayKeyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? '',
+    provider: 'airpay' as const,
+    callbackUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/api/payment/callback`,
     devBypass: process.env.NEXT_PUBLIC_DEV_BYPASS_PAYMENT === 'true',
   },
 
@@ -78,8 +79,8 @@ export const CONFIG = {
   /* ── Features / Coming Soon Toggles ──── */
   features: {
     trailerAvailable: false,
-    filmAvailable: false,
-    paymentEnabled: false,    /* enable once Razorpay keys are set */
+    filmAvailable: true,
+    paymentEnabled: true,
     socialFeedEnabled: true,
     newsFeedEnabled: true,
     mapEnabled: true,

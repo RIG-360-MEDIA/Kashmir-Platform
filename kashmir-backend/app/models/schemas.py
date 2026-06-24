@@ -66,24 +66,21 @@ class NewsItem(BaseModel):
 class NewsFeedResponse(BaseModel):
     articles: list[NewsItem]
     last_updated: datetime
-class PaymentCreateRequest(BaseModel):
+class AirpayCreateRequest(BaseModel):
     email: str
     name: str
- 
- 
-class PaymentCreateResponse(BaseModel):
-    order_id: str
-    amount: int  
-    currency: str
-    razorpay_key_id: str
- 
- 
-class PaymentVerifyRequest(BaseModel):
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
- 
- 
+    phone: str
+    address: str = ""
+    city: str = ""
+    state: str = ""
+    country: str = "India"
+    pin_code: str = ""
+
+class AirpayCreateResponse(BaseModel):
+    transaction_id: str
+    post_url: str
+    form_fields: dict
+
 class PaymentVerifyResponse(BaseModel):
     verified: bool
     access_token: Optional[str] = None

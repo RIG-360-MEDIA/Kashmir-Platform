@@ -14,28 +14,6 @@ import type { UserTimestamp, TimestampMarker } from '@/types/api';
 
 gsap.registerPlugin(ScrollTrigger);
 
-/* ── Razorpay global type ── */
-declare global {
-  interface Window {
-    Razorpay: new (options: {
-      key: string;
-      amount: number;
-      currency: string;
-      name: string;
-      description: string;
-      order_id: string;
-      handler: (response: {
-        razorpay_payment_id: string;
-        razorpay_order_id: string;
-        razorpay_signature: string;
-      }) => void;
-      prefill?: { name?: string; email?: string };
-      theme?: { color?: string };
-      modal?: { ondismiss?: () => void };
-    }) => { open(): void };
-  }
-}
-
 /* ── ReactPlayer — lazy, no SSR (v3 uses 'react-player', not 'react-player/lazy') ── */
 const ReactPlayer = dynamic(() => import('react-player'), {
   ssr: false,
@@ -321,10 +299,11 @@ export default function Watch() {
   );
 
   /* Payment form state */
-  const [payName, setPayName]   = useState('');
-  const [payEmail, setPayEmail] = useState('');
-  const [paying, setPaying]     = useState(false);
-  const [payError, setPayError] = useState<string | null>(null);
+  const [payName, setPayName]     = useState('');
+  const [payEmail, setPayEmail]   = useState('');
+  const [payPhone, setPayPhone]   = useState('');
+  const [paying, setPaying]       = useState(false);
+  const [payError, setPayError]   = useState<string | null>(null);
 
   const filmAvailable = CONFIG.features.filmAvailable;
   const filmUrl       = CONFIG.media.filmUrl;
@@ -334,9 +313,28 @@ export default function Watch() {
     setUserTimestamps(loadUserTimestamps());
   }, []);
 
+  /* Check URL for Airpay callback token */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+    const token = params.get('token');
+    if (paymentStatus === 'success' && token) {
+      localStorage.setItem(JWT_KEY, token);
+      setAccess('granted');
+      window.history.replaceState({}, '', window.location.pathname + '#watch');
+    } else if (paymentStatus === 'failed') {
+      setPayError('Payment was not completed. Please try again.');
+      setAccess('gate');
+      window.history.replaceState({}, '', window.location.pathname + '#watch');
+    }
+  }, []);
+
   /* JWT access check — only runs when film is available and no dev bypass */
   useEffect(() => {
     if (!filmAvailable || CONFIG.payment.devBypass) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment')) return;
     const token = localStorage.getItem(JWT_KEY);
     if (!token) {
       setAccess('gate');
@@ -350,59 +348,46 @@ export default function Watch() {
         setAccess('gate');
       }
     }).catch(() => {
-      /* Network error — fall to gate so user can try again */
       setAccess('gate');
     });
   }, [filmAvailable]);
 
-  /* Razorpay payment flow */
+  /* Airpay payment flow — creates order then submits a hidden form to Airpay */
   const handleWatch = async () => {
     if (!payName.trim()) { setPayError('Please enter your full name.'); return; }
     if (!EMAIL_RE.test(payEmail)) { setPayError('Please enter a valid email address.'); return; }
+    if (!/^[6-9]\d{9}$/.test(payPhone.trim())) { setPayError('Please enter a valid 10-digit Indian mobile number.'); return; }
 
     setPaying(true);
     setPayError(null);
 
-    const order = await api.createOrder(payEmail.trim(), payName.trim());
+    const order = await api.createAirpayOrder({
+      email: payEmail.trim(),
+      name: payName.trim(),
+      phone: payPhone.trim(),
+    });
+
     if (!order) {
       setPayError('Could not reach the payment server. Please try again in a moment.');
       setPaying(false);
       return;
     }
 
-    if (!window.Razorpay) {
-      setPayError('Payment system is still loading. Please wait a moment and try again.');
-      setPaying(false);
-      return;
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = order.post_url;
+    form.style.display = 'none';
+
+    for (const [key, value] of Object.entries(order.form_fields)) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = value;
+      form.appendChild(input);
     }
 
-    const rzp = new window.Razorpay({
-      key:         order.key_id || CONFIG.payment.razorpayKeyId,
-      amount:      order.amount,
-      currency:    order.currency,
-      name:        CONFIG.film.title,
-      description: `${CONFIG.pricing.accessType} Access · Full HD`,
-      order_id:    order.order_id,
-      handler: async (response) => {
-        const result = await api.verifyPayment({
-          razorpay_payment_id: response.razorpay_payment_id,
-          razorpay_order_id:   response.razorpay_order_id,
-          razorpay_signature:  response.razorpay_signature,
-        });
-        if (result?.verified && result.access_token) {
-          localStorage.setItem(JWT_KEY, result.access_token);
-          setAccess('granted');
-        } else {
-          setPayError(result?.message ?? 'Payment could not be verified. Please contact support.');
-        }
-        setPaying(false);
-      },
-      prefill: { name: payName.trim(), email: payEmail.trim() },
-      theme:   { color: '#D4A017' },
-      modal:   { ondismiss: () => setPaying(false) },
-    });
-
-    rzp.open();
+    document.body.appendChild(form);
+    form.submit();
   };
 
   /* User timestamp actions */
@@ -618,7 +603,7 @@ export default function Watch() {
                       </div>
 
                       {/* Email */}
-                      <div style={{ marginBottom: 'var(--space-5)' }}>
+                      <div style={{ marginBottom: 'var(--space-4)' }}>
                         <label style={{
                           fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)',
                           letterSpacing: '0.20em', textTransform: 'uppercase',
@@ -633,6 +618,34 @@ export default function Watch() {
                           onChange={e => { setPayEmail(e.target.value); setPayError(null); }}
                           onKeyDown={e => e.key === 'Enter' && handleWatch()}
                           placeholder="you@example.com"
+                          disabled={paying}
+                          style={{
+                            width: '100%', padding: 'var(--space-3) var(--space-4)',
+                            backgroundColor: 'var(--color-deep-slate)',
+                            border: 'var(--border-base)', borderRadius: 'var(--radius-sm)',
+                            fontFamily: 'var(--font-body)', fontSize: 'var(--text-base)',
+                            color: 'var(--color-snow)', outline: 'none', cursor: 'text',
+                            opacity: paying ? 0.5 : 1,
+                          }}
+                        />
+                      </div>
+
+                      {/* Phone */}
+                      <div style={{ marginBottom: 'var(--space-5)' }}>
+                        <label style={{
+                          fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)',
+                          letterSpacing: '0.20em', textTransform: 'uppercase',
+                          color: 'var(--color-ash-text)', display: 'block',
+                          marginBottom: 'var(--space-2)',
+                        }}>
+                          Phone Number
+                        </label>
+                        <input
+                          type="tel"
+                          value={payPhone}
+                          onChange={e => { setPayPhone(e.target.value.replace(/\D/g, '').slice(0, 10)); setPayError(null); }}
+                          onKeyDown={e => e.key === 'Enter' && handleWatch()}
+                          placeholder="10-digit mobile number"
                           disabled={paying}
                           style={{
                             width: '100%', padding: 'var(--space-3) var(--space-4)',
@@ -668,7 +681,7 @@ export default function Watch() {
                         className="btn btn-primary"
                         style={{ width: '100%', opacity: paying ? 0.7 : 1, cursor: paying ? 'wait' : 'none' }}
                       >
-                        {paying ? 'Processing…' : `Watch Now · ${CONFIG.pricing.amountDisplay}`}
+                        {paying ? 'Redirecting to Airpay…' : `Watch Now · ${CONFIG.pricing.amountDisplay}`}
                       </button>
                     </div>
                   ) : (
@@ -691,7 +704,7 @@ export default function Watch() {
 
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', letterSpacing: '0.20em', textTransform: 'uppercase', color: 'var(--color-ash-text)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <span style={{ width: '14px', height: '14px', display: 'inline-block', borderRadius: '50%', border: '1px solid var(--color-ash)' }}>🔒</span>
-                    Secure Payment by Razorpay · Instant Access
+                    Secure Payment by Airpay · Instant Access
                   </div>
 
                   {/* Chapter preview */}
@@ -774,7 +787,7 @@ export default function Watch() {
 
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', letterSpacing: '0.20em', textTransform: 'uppercase', color: 'var(--color-ash-text)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                 <span style={{ width: '14px', height: '14px', display: 'inline-block', borderRadius: '50%', border: '1px solid var(--color-ash)' }}>🔒</span>
-                Secure Payment by Razorpay · Instant Access
+                Secure Payment by Airpay · Instant Access
               </div>
 
               <div style={{ marginTop: 'var(--space-10)' }}>
